@@ -6,19 +6,19 @@ namespace TinyChatServer.ChatServer.ChatLinker
 {
     class LinkingHelper
     {
-        private Dictionary<IPAddress, ChatClient> ChatClients;
+        private Dictionary<IPAddress, ChatClient> _chatClients;
 
         public LinkingHelper(Dictionary<IPAddress, ChatClient> chatClients)
         {
-            ChatClients = chatClients;
+            _chatClients = chatClients;
         }
         
         public void InitLinks(int searchRange)
         {
-            foreach (var item in ChatClients)
+            foreach (var item in _chatClients)
             {
                 item.Value.LinkedClients.Clear();
-                foreach (var other in ChatClients)
+                foreach (var other in _chatClients)
                 {
                     if (item.Value == other.Value)
                         continue;
@@ -35,7 +35,7 @@ namespace TinyChatServer.ChatServer.ChatLinker
         {
             chatClient.LinkedClients.Clear();
 
-            foreach (var other in ChatClients)
+            foreach (var other in _chatClients)
             {
                 if (chatClient == other.Value)
                     continue;
@@ -58,7 +58,7 @@ namespace TinyChatServer.ChatServer.ChatLinker
             }
             chatClient.LinkedClients.Clear();
 
-            foreach (var other in ChatClients)
+            foreach (var other in _chatClients)
             {
                 if (chatClient == other.Value)
                     continue;
