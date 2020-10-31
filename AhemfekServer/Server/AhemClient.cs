@@ -1,13 +1,13 @@
 ﻿using System.Collections.Generic;
-using TinyChatServer.Model;
-using TinyChatServer.Server.ClientProcess;
+using AhemfekServer.Model;
+using TinyTCPServer.ClientProcess;
 using Newtonsoft.Json.Linq;
 
-namespace TinyChatServer.ChatServer
+namespace AhemfekServer.Server
 {
-    public class ChatClient
+    public class AhemClient
     {
-        public delegate void GPSUpdateHandler(ChatClient chatClient);
+        public delegate void GPSUpdateHandler(AhemClient chatClient);
         public event GPSUpdateHandler OnGPSUpdated;
         
         public readonly ClientSocket ClientSocket;
@@ -27,11 +27,11 @@ namespace TinyChatServer.ChatServer
             } 
         }
         public GPSdata gPSdata;
-        public List<ChatClient> LinkedClients { get; private set; }
+        public List<AhemClient> LinkedClients { get; private set; }
 
         private Message PrevMessage;
 
-        public ChatClient(ClientSocket clientSocket, string userEmail, string id, string name, GPSdata gPSdata)
+        public AhemClient(ClientSocket clientSocket, string userEmail, string id, string name, GPSdata gPSdata)
         {
             ClientSocket = clientSocket;
             UserEmail = userEmail;
@@ -39,7 +39,7 @@ namespace TinyChatServer.ChatServer
             Id = id;
             Name = name;
             GPSdata = gPSdata;
-            LinkedClients = new List<ChatClient>();
+            LinkedClients = new List<AhemClient>();
         }
 
         public void OnRootMessageRecived(Message message)

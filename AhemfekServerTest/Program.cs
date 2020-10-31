@@ -6,7 +6,7 @@ using System.Threading;
 using TinyChatServer.ChatServer;
 using TinyChatServer.Model;
 
-namespace ConsoleTest
+namespace AhemfekServerTest
 {
     class Program
     {

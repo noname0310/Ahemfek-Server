@@ -4,7 +4,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 
-namespace TinyChatServer.Server.ClientProcess
+namespace TinyTCPServer.ClientProcess
 {
     class ClientSocketManager
     {
@@ -16,10 +16,12 @@ namespace TinyChatServer.Server.ClientProcess
         public event SocketHandler AsyncOnClientDisConnect;
         public event SocketHandler AsyncOnClientDisConnected;
 
-        public delegate void ClientDataHandler(ClientSocket client, string content);
-        public event ClientDataHandler AsyncOnClientDataRecived;
+        public delegate void ClientStringDataHandler(ClientSocket client, string content);
+        public event ClientStringDataHandler AsyncOnClientUTF8JsonDataRecived;
+        public delegate void ClientByteDataHandler(ClientSocket client, byte[] content);
+        public event ClientByteDataHandler AsyncOnClientByteStreamDataRecived;
 
-        public IReadOnlyDictionary<IPAddress, ClientSocket> ReadOnlyClientSockets;
+        public IReadOnlyDictionary<IPAddress, ClientSocket> ReadOnlyClientSockets => ClientSockets;
 
         private readonly uint PacketSize;
         private Dictionary<IPAddress, ClientSocket> ClientSockets;
@@ -29,7 +31,6 @@ namespace TinyChatServer.Server.ClientProcess
         {
             PacketSize = packetsize;
             ClientSockets = new Dictionary<IPAddress, ClientSocket>();
-            ReadOnlyClientSockets = ClientSockets;
             ClientSocketManagerLickObject = new object();
         }
 
@@ -83,18 +84,23 @@ namespace TinyChatServer.Server.ClientProcess
 
         private void ClientSocket_AsyncOnClientDataRecived(ClientSocket clientSocket, byte[] ReceivedData, ParseResult parseResult)
         {
-            string content;
-
-            if (parseResult.ContentLength == 0)
-                content = "";
-            else
+            if (parseResult.PacketType == PacketType.ByteStream)
+                AsyncOnClientByteStreamDataRecived?.Invoke(clientSocket, ReceivedData);
+            else if (parseResult.PacketType == PacketType.UTF8Json)
             {
-                byte[] contentByte = new byte[parseResult.ContentLength];
-                Buffer.BlockCopy(ReceivedData, sizeof(int), contentByte, 0, contentByte.Length);
-                content = Encoding.UTF8.GetString(contentByte);
-            }
+                string content;
 
-            AsyncOnClientDataRecived?.Invoke(clientSocket, content);
+                if (parseResult.ContentLength == 0)
+                    content = "";
+                else
+                {
+                    byte[] contentByte = new byte[parseResult.ContentLength];
+                    Buffer.BlockCopy(ReceivedData, PacketParser.HeaderSize, contentByte, 0, contentByte.Length);
+                    content = Encoding.UTF8.GetString(contentByte);
+                }
+
+                AsyncOnClientUTF8JsonDataRecived?.Invoke(clientSocket, content);
+            }
         }
     }
 }

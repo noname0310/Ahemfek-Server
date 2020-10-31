@@ -5,18 +5,20 @@ using System.Net.Sockets;
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
-using TinyChatServer.Server.ClientProcess;
+using TinyTCPServer.ClientProcess;
 
-namespace TinyChatServer.Server
+namespace TinyTCPServer
 {
-    class SocketServer
+    public class SocketServer
     {
         public delegate void MessageHandler(string msg);
         public event MessageHandler OnMessageRecived;
         public event MessageHandler OnErrMessageRecived;
 
-        public delegate void ClientDataHandler(ClientSocket client, string msg);
-        public event ClientDataHandler OnClientDataRecived;
+        public delegate void ClientStringDataHandler(ClientSocket client, string content);
+        public event ClientStringDataHandler OnClientUTF8JsonDataRecived;
+        public delegate void ClientByteDataHandler(ClientSocket client, byte[] content);
+        public event ClientByteDataHandler OnClientByteStreamDataRecived;
 
         public delegate void SocketHandler(ClientSocket client);
         public event SocketHandler OnClientConnected;
@@ -38,7 +40,8 @@ namespace TinyChatServer.Server
             ClientSocketManager = new ClientSocketManager(packetsize);
             ClientSocketManager.AsyncOnMessageRecived += ClientSocketManager_AsyncOnMessageRecived;
             ClientSocketManager.AsyncOnErrMessageRecived += ClientSocketManager_AsyncOnErrMessageRecived;
-            ClientSocketManager.AsyncOnClientDataRecived += ClientSocketManager_AsyncOnClientDataRecived;
+            ClientSocketManager.AsyncOnClientUTF8JsonDataRecived += ClientSocketManager_AsyncOnClientUTF8JsonDataRecived;
+            ClientSocketManager.AsyncOnClientByteStreamDataRecived += ClientSocketManager_AsyncOnClientByteStreamDataRecived;
             ClientSocketManager.AsyncOnClientDisConnect += ClientSocketManager_AsyncOnClientDisConnect;
             ClientSocketManager.AsyncOnClientDisConnected += ClientSocketManager_AsyncOnClientDisConnected;
 
@@ -55,12 +58,14 @@ namespace TinyChatServer.Server
             ActionsConcurrentQueue.Enqueue(() => OnMessageRecived?.Invoke(msg));
         private void ClientSocketManager_AsyncOnErrMessageRecived(string msg) => 
             ActionsConcurrentQueue.Enqueue(() => OnErrMessageRecived?.Invoke(msg));
-        private void ClientSocketManager_AsyncOnClientDataRecived(ClientSocket client, string content) => 
-            ActionsConcurrentQueue.Enqueue(() => OnClientDataRecived?.Invoke(client, content));
+        private void ClientSocketManager_AsyncOnClientUTF8JsonDataRecived(ClientSocket client, string content) => 
+            ActionsConcurrentQueue.Enqueue(() => OnClientUTF8JsonDataRecived?.Invoke(client, content));
+        private void ClientSocketManager_AsyncOnClientByteStreamDataRecived(ClientSocket client, byte[] content) =>
+            ActionsConcurrentQueue.Enqueue(() => OnClientByteStreamDataRecived?.Invoke(client, content));
         private void ClientSocketManager_AsyncOnClientDisConnect(ClientSocket client) => 
-            ActionsConcurrentQueue.Enqueue(() => OnClientDisConnect.Invoke(client));
+            ActionsConcurrentQueue.Enqueue(() => OnClientDisConnect?.Invoke(client));
         private void ClientSocketManager_AsyncOnClientDisConnected(ClientSocket client) =>
-            ActionsConcurrentQueue.Enqueue(() => OnClientDisConnected.Invoke(client));
+            ActionsConcurrentQueue.Enqueue(() => OnClientDisConnected?.Invoke(client));
 
         private void SocketListener_AsyncOnMessageRecived(string msg) =>
             ActionsConcurrentQueue.Enqueue(() => OnMessageRecived?.Invoke(msg));
@@ -82,11 +87,11 @@ namespace TinyChatServer.Server
             Running = true;
             SocketListener.Start(iPEndPoint);
         }
-        public void Start(uint port)
+        public void Start(int port)
         {
-            //IPHostEntry ipHostInfo = Dns.GetHostEntry(Dns.GetHostName());
-            IPAddress ipAddress = IPAddress.Any; /*ipHostInfo.AddressList[0];*/
-            Start(new IPEndPoint(ipAddress, (int)port));
+            IPHostEntry ipHostInfo = Dns.GetHostEntry(Dns.GetHostName());
+            IPAddress ipAddress = ipHostInfo.AddressList[0];
+            Start(new IPEndPoint(ipAddress, port));
         }
 
         public void Stop()

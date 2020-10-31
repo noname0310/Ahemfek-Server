@@ -2,35 +2,34 @@
 using System.Collections.Generic;
 using System.Text;
 using System.Net;
-using TinyChatServer.Model;
-using TinyChatServer.Server.ClientProcess;
-using TinyChatServer.ChatServer.ChatLinker;
+using AhemfekServer.Model;
+using TinyTCPServer.ClientProcess;
 
-namespace TinyChatServer.ChatServer
+namespace AhemfekServer.Server
 {
     public interface IChatClientManager
     {
-        IReadOnlyDictionary<IPAddress, ChatClient> ReadOnlyChatClients { get; set; }
+        IReadOnlyDictionary<IPAddress, AhemClient> ReadOnlyChatClients { get; set; }
         int SearchRange { get; set; }
     }
 
-    class ChatClientManager : IChatClientManager
+    class AhemClientManager : IChatClientManager
     {
         public delegate void MessageHandler(string msg);
         //public event MessageHandler OnMessageRecived;
         public event MessageHandler OnErrMessageRecived;
 
-        public IReadOnlyDictionary<IPAddress, ChatClient> ReadOnlyChatClients { get; set; }
+        public IReadOnlyDictionary<IPAddress, AhemClient> ReadOnlyChatClients { get; set; }
         public int SearchRange { get; set; }
 
-        private Dictionary<IPAddress, ChatClient> ChatClients;
+        private Dictionary<IPAddress, AhemClient> ChatClients;
 
         private LinkingHelper LinkingHelper;
 
-        public ChatClientManager()
+        public AhemClientManager()
         {
             SearchRange = 30;
-            ChatClients = new Dictionary<IPAddress, ChatClient>();
+            ChatClients = new Dictionary<IPAddress, AhemClient>();
             ReadOnlyChatClients = ChatClients;
 
             LinkingHelper = new LinkingHelper(ChatClients);
@@ -45,9 +44,9 @@ namespace TinyChatServer.ChatServer
             ChatClients.Clear();
         }
 
-        public ChatClient AddClient(ClientSocket clientSocket, ClientConnected clientConnectedinfo)
+        public AhemClient AddClient(ClientSocket clientSocket, ClientConnected clientConnectedinfo)
         {
-            ChatClient searched = null;
+            AhemClient searched = null;
 
             foreach (var item in ChatClients)
             {
@@ -66,7 +65,7 @@ namespace TinyChatServer.ChatServer
                 return searched;
             }
 
-            ChatClient chatClient = new ChatClient(
+            AhemClient chatClient = new AhemClient(
                 clientSocket,
                 clientConnectedinfo.ChatClient.UserEmail,
                 clientConnectedinfo.ChatClient.Id,
@@ -81,7 +80,7 @@ namespace TinyChatServer.ChatServer
             return chatClient;
         }
 
-        private void ChatClient_OnGPSUpdated(ChatClient chatClient)
+        private void ChatClient_OnGPSUpdated(AhemClient chatClient)
         {
             LinkingHelper.UpdateLink(chatClient, SearchRange);
             chatClient.SendData(new LinkInfo(chatClient.LinkedClients.Count, SearchRange));
@@ -89,7 +88,7 @@ namespace TinyChatServer.ChatServer
 
         public void RemoveClient(ClientSocket clientSocket)
         {
-            ChatClient searched = null;
+            AhemClient searched = null;
 
             foreach (var item in ChatClients)
             {

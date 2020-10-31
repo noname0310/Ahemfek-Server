@@ -1,75 +1,68 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Collections;
-using System.Collections.Generic;
-using System.Net;
-using TinyChatServer.Model;
-using TinyChatServer.Server;
-using TinyChatServer.Server.ClientProcess;
+using Newtonsoft.Json.Linq;
+using TinyTCPServer;
+using TinyTCPServer.ClientProcess;
+using AhemfekServer.Model;
 
-namespace TinyChatServer.ChatServer
+namespace AhemfekServer.Server
 {
-    public class ChatServer
+    public class AhemServer
     {
         public delegate void MessageHandler(string msg);
         public event MessageHandler OnMessageRecived;
         public event MessageHandler OnErrMessageRecived;
 
-        public delegate void ClientDataHandler(ChatClient client, JObject packet);
-        public event ClientDataHandler OnClientDataRecived;
+        public delegate void ClientJsonDataHandler(AhemClient client, JObject packet);
+        public event ClientJsonDataHandler OnClientJsonDataRecived;
+        public delegate void ClientStreamDataHandler(AhemClient client, byte[] packet);
+        public event ClientStreamDataHandler OnClientStreamDataRecived;
 
-        public delegate void ChatSocketHandler(ChatClient client);
+        public delegate void ChatSocketHandler(AhemClient client);
         public event ChatSocketHandler OnClientConnected;
 
         public delegate void SocketHandler(ClientSocket client);
         public event SocketHandler OnClientDisConnect;
         public event SocketHandler OnClientDisConnected;
 
-        public IChatClientManager IChatClientManager
-        {
-            get
-            {
-                return ChatClientManager;
-            }
-        }
+        public IChatClientManager IChatClientManager => ChatClientManager;
 
         private SocketServer SocketServer;
-        private ChatClientManager ChatClientManager;
+        private AhemClientManager ChatClientManager;
 
-        public ChatServer()
+        public AhemServer()
         {
             SocketServer = new SocketServer(512);
 
             SocketServer.OnErrMessageRecived += SocketServer_OnErrMessageRecived;
             SocketServer.OnMessageRecived += SocketServer_OnMessageRecived;
             SocketServer.OnClientConnected += SocketServer_OnClientConnected;
-            SocketServer.OnClientDataRecived += SocketServer_OnClientDataRecived;
+            SocketServer.OnClientUTF8JsonDataRecived += SocketServer_OnClientJsonDataRecived;
+            SocketServer.OnClientByteStreamDataRecived += SocketServer_OnClientByteStreamDataRecived;
             SocketServer.OnClientDisConnect += SocketServer_OnClientDisConnect;
             SocketServer.OnClientDisConnected += SocketServer_OnClientDisConnected;
 
-            ChatClientManager = new ChatClientManager();
+            ChatClientManager = new AhemClientManager();
         }
 
         private void SocketServer_OnMessageRecived(string msg) => OnMessageRecived?.Invoke(msg);
         private void SocketServer_OnErrMessageRecived(string msg) => OnErrMessageRecived?.Invoke(msg);
 
-        private void SocketServer_OnClientConnected(ClientSocket client)
-        {
-            OnMessageRecived?.Invoke(string.Format("SocketServer_OnClientConnected {0}", client.IPAddress.ToString()));
-        }
-        private void SocketServer_OnClientDataRecived(ClientSocket client, string msg)
+        private void SocketServer_OnClientConnected(ClientSocket client) => OnMessageRecived?.Invoke(string.Format("SocketServer_OnClientConnected {0}", client.IPAddress.ToString()));
+
+        private void SocketServer_OnClientJsonDataRecived(ClientSocket client, string msg)
         {
             OnMessageRecived?.Invoke(string.Format("SocketServer_OnClientDataRecived {0}", msg));
             JObject jObject = JObject.Parse(msg);
 
-            PacketType packetType = (PacketType)Enum.Parse(typeof(PacketType), jObject.ToObject<Packet>().PacketType);
+            //Model.PacketType packetType = (Model.PacketType)Enum.Parse(typeof(Model.PacketType), jObject.ToObject<Packet>().PacketType);
+            Model.PacketType packetType = jObject.ToObject<Packet>().PacketType;
 
-            if (packetType == PacketType.ClientConnected)
+            if (packetType == Model.PacketType.ClientConnected)
             {
-
                 if (!ChatClientManager.ReadOnlyChatClients.ContainsKey(client.IPAddress))
                 {
-                    ChatClient chatClient = ChatClientManager.AddClient(client, jObject.ToObject<ClientConnected>());
+                    AhemClient chatClient = ChatClientManager.AddClient(client, jObject.ToObject<ClientConnected>());
                     OnMessageRecived?.Invoke(string.Format("Client {0} authenticized", client.IPAddress.ToString()));
                     OnClientConnected?.Invoke(chatClient);
                 }
@@ -85,11 +78,11 @@ namespace TinyChatServer.ChatServer
                 return;
             }
 
-            ChatClient indexedClient = ChatClientManager.ReadOnlyChatClients[client.IPAddress];
+            AhemClient indexedClient = ChatClientManager.ReadOnlyChatClients[client.IPAddress];
 
             switch (packetType)
             {
-                case PacketType.ClientDisConnect:
+                case Model.PacketType.ClientDisConnect:
                     if (SocketServer.ClientSockets.ContainsKey(client.IPAddress))
                     {
                         indexedClient.ClientSocket.Dispose();
@@ -97,23 +90,23 @@ namespace TinyChatServer.ChatServer
                     }
                     break;
 
-                case PacketType.Message:
-                    indexedClient.OnRootMessageRecived(jObject.ToObject<Message>());
-                    OnMessageRecived?.Invoke(string.Format("Message recived from client {0}", client.IPAddress.ToString()));
-                    OnClientDataRecived?.Invoke(indexedClient, jObject);
-                    break;
-
-                case PacketType.GPS:
-                    indexedClient.GPSdata = new GPSdata(jObject.ToObject<GPS>().GPSdata);
-                    OnMessageRecived?.Invoke(string.Format("GPS value recived from client {0}", client.IPAddress.ToString()));
-                    OnClientDataRecived?.Invoke(indexedClient, jObject);
-                    break;
+                //case Model.PacketType.Message:
+                //    indexedClient.OnRootMessageRecived(jObject.ToObject<Message>());
+                //    OnMessageRecived?.Invoke(string.Format("Message recived from client {0}", client.IPAddress.ToString()));
+                //    OnClientJsonDataRecived?.Invoke(indexedClient, jObject);
+                //    break;
 
                 default:
                     OnErrMessageRecived?.Invoke(string.Format("Unidentified packet {0} recived from client {1}", ((int)packetType).ToString(), client.IPAddress.ToString()));
                     break;
             }
         }
+
+        private void SocketServer_OnClientByteStreamDataRecived(ClientSocket client, byte[] content)
+        {
+            throw new NotImplementedException();
+        }
+
         private void SocketServer_OnClientDisConnect(ClientSocket client)
         {
             ChatClientManager.RemoveClient(client);
@@ -121,7 +114,7 @@ namespace TinyChatServer.ChatServer
         }
         private void SocketServer_OnClientDisConnected(ClientSocket client)
         {
-            if (!ChatClientManager.ReadOnlyChatClients.ContainsKey(client.IPAddress))
+            if (ChatClientManager.ReadOnlyChatClients.ContainsKey(client.IPAddress))
                 ChatClientManager.RemoveClient(client);
             OnClientDisConnected?.Invoke(client);
         }
@@ -138,14 +131,9 @@ namespace TinyChatServer.ChatServer
             ChatClientManager.Dispose();
             OnMessageRecived?.Invoke("Server stopped");
         }
-        public void RunSyncRoutine()
-        {
-            SocketServer.RunSyncRoutine();
-        }
 
-        public IEnumerator GetSyncRoutine()
-        {
-            return SocketServer.GetSyncRoutine();
-        }
+        public void RunSyncRoutine() => SocketServer.RunSyncRoutine();
+
+        public IEnumerator GetSyncRoutine() => SocketServer.GetSyncRoutine();
     }
 }
