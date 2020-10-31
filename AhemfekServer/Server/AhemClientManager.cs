@@ -7,109 +7,80 @@ using TinyTCPServer.ClientProcess;
 
 namespace AhemfekServer.Server
 {
-    public interface IChatClientManager
+    public interface IAhemClientManager
     {
-        IReadOnlyDictionary<IPAddress, AhemClient> ReadOnlyChatClients { get; set; }
-        int SearchRange { get; set; }
+        IReadOnlyDictionary<IPAddress, AhemClient> ReadOnlyAhemClients { get; }
     }
 
-    class AhemClientManager : IChatClientManager
+    class AhemClientManager : IAhemClientManager
     {
         public delegate void MessageHandler(string msg);
         //public event MessageHandler OnMessageRecived;
         public event MessageHandler OnErrMessageRecived;
 
-        public IReadOnlyDictionary<IPAddress, AhemClient> ReadOnlyChatClients { get; set; }
-        public int SearchRange { get; set; }
+        public IReadOnlyDictionary<IPAddress, AhemClient> ReadOnlyAhemClients => _ahemClients;
 
-        private Dictionary<IPAddress, AhemClient> ChatClients;
-
-        private LinkingHelper LinkingHelper;
+        private readonly Dictionary<IPAddress, AhemClient> _ahemClients;
+        private readonly Dictionary<IPAddress, int> _clientStreamQueue;
 
         public AhemClientManager()
         {
-            SearchRange = 30;
-            ChatClients = new Dictionary<IPAddress, AhemClient>();
-            ReadOnlyChatClients = ChatClients;
-
-            LinkingHelper = new LinkingHelper(ChatClients);
+            _ahemClients = new Dictionary<IPAddress, AhemClient>();
         }
 
         public void Dispose()
         {
-            foreach (var item in ChatClients)
-            {
-                item.Value.OnGPSUpdated -= ChatClient_OnGPSUpdated;
-            }
-            ChatClients.Clear();
+            _ahemClients.Clear();
         }
 
         public AhemClient AddClient(ClientSocket clientSocket, ClientConnected clientConnectedinfo)
         {
-            AhemClient searched = null;
-
-            foreach (var item in ChatClients)
-            {
-                if (item.Value.ClientSocket == clientSocket)
-                {
-                    searched = item.Value;
-                    break;
-                }
-            }
-
-            if (searched != null)
-            {
+            if (_ahemClients.TryGetValue(clientSocket.IPAddress, out AhemClient searchedclient))
+            {    
                 OnErrMessageRecived?.Invoke(
                        string.Format("ClientSocket {0} is already exist while trying AddClient", clientSocket.IPAddress.ToString())
                        );
-                return searched;
+                return searchedclient;
             }
 
             AhemClient chatClient = new AhemClient(
                 clientSocket,
-                clientConnectedinfo.ChatClient.UserEmail,
-                clientConnectedinfo.ChatClient.Id,
-                clientConnectedinfo.ChatClient.Name,
-                new GPSdata(clientConnectedinfo.GPSdata)
+                clientConnectedinfo.ClientId
                 );
-            LinkingHelper.LinkClient(chatClient, SearchRange);
-            chatClient.SendData(new LinkInfo(chatClient.LinkedClients.Count, SearchRange));
-            chatClient.OnGPSUpdated += ChatClient_OnGPSUpdated;
 
-            ChatClients.Add(clientSocket.IPAddress, chatClient);
+            _ahemClients.Add(clientSocket.IPAddress, chatClient);
             return chatClient;
-        }
-
-        private void ChatClient_OnGPSUpdated(AhemClient chatClient)
-        {
-            LinkingHelper.UpdateLink(chatClient, SearchRange);
-            chatClient.SendData(new LinkInfo(chatClient.LinkedClients.Count, SearchRange));
         }
 
         public void RemoveClient(ClientSocket clientSocket)
         {
-            AhemClient searched = null;
-
-            foreach (var item in ChatClients)
+            if (_ahemClients.TryGetValue(clientSocket.IPAddress , out AhemClient client))
             {
-                if (item.Value.ClientSocket == clientSocket)
-                {
-                    searched = item.Value;
-                    break;
-                }
+                client.SendData(new ClientDisConnect());
+                _ahemClients.Remove(client.ClientSocket.IPAddress);
             }
-
-            if (searched == null)
+            else
             {
                 OnErrMessageRecived?.Invoke(
                     string.Format("ClientSocket {0} is not exist while trying RemoveClient", clientSocket.IPAddress.ToString())
                     );
-                return;
             }
+        }
 
-            searched.SendData(new ClientDisConnect());
-            ChatClients.Remove(searched.ClientSocket.IPAddress);
-            searched.OnGPSUpdated -= ChatClient_OnGPSUpdated;
+        public void ClientStreamEnqueue(ClientSocket clientSocket, StreamHeader streamHeader)
+        {
+            if (_ahemClients.TryGetValue(clientSocket.IPAddress, out AhemClient client))
+            {
+
+            }
+        }
+
+        public void ClientStreamDequeue(ClientSocket clientSocket, byte[] value)
+        {
+            if (_ahemClients.TryGetValue(clientSocket.IPAddress, out AhemClient client))
+            {
+
+            }
         }
     }
 }

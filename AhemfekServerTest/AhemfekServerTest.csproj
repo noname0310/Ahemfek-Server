@@ -9,4 +9,8 @@
     <PackageReference Include="CLArgsParser" Version="1.0.1" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\AhemfekServer\AhemfekServer.csproj" />
+  </ItemGroup>
+
 </Project>

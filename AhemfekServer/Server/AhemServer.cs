@@ -25,10 +25,10 @@ namespace AhemfekServer.Server
         public event SocketHandler OnClientDisConnect;
         public event SocketHandler OnClientDisConnected;
 
-        public IChatClientManager IChatClientManager => ChatClientManager;
+        public IAhemClientManager IAhemClientManager => AhemClientManager;
 
         private SocketServer SocketServer;
-        private AhemClientManager ChatClientManager;
+        private AhemClientManager AhemClientManager;
 
         public AhemServer()
         {
@@ -42,7 +42,7 @@ namespace AhemfekServer.Server
             SocketServer.OnClientDisConnect += SocketServer_OnClientDisConnect;
             SocketServer.OnClientDisConnected += SocketServer_OnClientDisConnected;
 
-            ChatClientManager = new AhemClientManager();
+            AhemClientManager = new AhemClientManager();
         }
 
         private void SocketServer_OnMessageRecived(string msg) => OnMessageRecived?.Invoke(msg);
@@ -60,9 +60,9 @@ namespace AhemfekServer.Server
 
             if (packetType == Model.PacketType.ClientConnected)
             {
-                if (!ChatClientManager.ReadOnlyChatClients.ContainsKey(client.IPAddress))
+                if (!AhemClientManager.ReadOnlyAhemClients.ContainsKey(client.IPAddress))
                 {
-                    AhemClient chatClient = ChatClientManager.AddClient(client, jObject.ToObject<ClientConnected>());
+                    AhemClient chatClient = AhemClientManager.AddClient(client, jObject.ToObject<ClientConnected>());
                     OnMessageRecived?.Invoke(string.Format("Client {0} authenticized", client.IPAddress.ToString()));
                     OnClientConnected?.Invoke(chatClient);
                 }
@@ -72,13 +72,13 @@ namespace AhemfekServer.Server
                 return;
             }
 
-            if (ChatClientManager.ReadOnlyChatClients.ContainsKey(client.IPAddress) == false)
+            if (AhemClientManager.ReadOnlyAhemClients.ContainsKey(client.IPAddress) == false)
             {
                 OnErrMessageRecived?.Invoke(string.Format("Unauthenticized or Disposed client {0} trying send data!", client.IPAddress.ToString()));
                 return;
             }
 
-            AhemClient indexedClient = ChatClientManager.ReadOnlyChatClients[client.IPAddress];
+            AhemClient indexedClient = AhemClientManager.ReadOnlyAhemClients[client.IPAddress];
 
             switch (packetType)
             {
@@ -90,11 +90,16 @@ namespace AhemfekServer.Server
                     }
                     break;
 
-                //case Model.PacketType.Message:
-                //    indexedClient.OnRootMessageRecived(jObject.ToObject<Message>());
-                //    OnMessageRecived?.Invoke(string.Format("Message recived from client {0}", client.IPAddress.ToString()));
-                //    OnClientJsonDataRecived?.Invoke(indexedClient, jObject);
-                //    break;
+                case Model.PacketType.StreamHeader:
+                    switch (jObject.ToObject<StreamHeader>().StreamPacketType)
+                    {
+                        case StreamPacketType.Image:
+                            AhemClientManager.ClientStreamEnqueue(client, jObject.ToObject<ImageStream>());
+                            break;
+                        default:
+                            break;
+                    }
+                    break;
 
                 default:
                     OnErrMessageRecived?.Invoke(string.Format("Unidentified packet {0} recived from client {1}", ((int)packetType).ToString(), client.IPAddress.ToString()));
@@ -104,18 +109,19 @@ namespace AhemfekServer.Server
 
         private void SocketServer_OnClientByteStreamDataRecived(ClientSocket client, byte[] content)
         {
-            throw new NotImplementedException();
+            OnMessageRecived?.Invoke($"SocketServer_OnClientByteStreamDataRecived Length:{content.Length}");
+            AhemClientManager.ClientStreamDequeue(client, content);
         }
 
         private void SocketServer_OnClientDisConnect(ClientSocket client)
         {
-            ChatClientManager.RemoveClient(client);
+            AhemClientManager.RemoveClient(client);
             OnClientDisConnect?.Invoke(client);
         }
         private void SocketServer_OnClientDisConnected(ClientSocket client)
         {
-            if (ChatClientManager.ReadOnlyChatClients.ContainsKey(client.IPAddress))
-                ChatClientManager.RemoveClient(client);
+            if (AhemClientManager.ReadOnlyAhemClients.ContainsKey(client.IPAddress))
+                AhemClientManager.RemoveClient(client);
             OnClientDisConnected?.Invoke(client);
         }
 
@@ -128,11 +134,13 @@ namespace AhemfekServer.Server
         public void Stop()
         {
             SocketServer.Stop();
-            ChatClientManager.Dispose();
+            AhemClientManager.Dispose();
             OnMessageRecived?.Invoke("Server stopped");
         }
 
         public void RunSyncRoutine() => SocketServer.RunSyncRoutine();
+
+        public void RunSyncRoutine(int delay) => SocketServer.RunSyncRoutine(delay);
 
         public IEnumerator GetSyncRoutine() => SocketServer.GetSyncRoutine();
     }

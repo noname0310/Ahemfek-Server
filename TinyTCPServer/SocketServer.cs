@@ -6,6 +6,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Concurrent;
 using TinyTCPServer.ClientProcess;
+using System.Threading.Tasks;
 
 namespace TinyTCPServer
 {
@@ -117,6 +118,19 @@ namespace TinyTCPServer
 
                 if ((int)enumerator.Current == 0)
                     break;
+            }
+        }
+
+        public void RunSyncRoutine(int delay)
+        {
+            IEnumerator enumerator = GetSyncRoutine();
+            while (true)
+            {
+                enumerator.MoveNext();
+
+                if ((int)enumerator.Current == 0)
+                    break;
+                Task.Delay(delay).Wait();
             }
         }
 

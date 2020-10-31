@@ -1,10 +1,7 @@
-﻿using Newtonsoft.Json.Linq;
-using System;
+﻿using System;
 using System.Collections;
-using System.Net;
 using System.Threading;
-using TinyChatServer.ChatServer;
-using TinyChatServer.Model;
+using AhemfekServer.Server;
 
 namespace AhemfekServerTest
 {
@@ -12,23 +9,20 @@ namespace AhemfekServerTest
     {
         static void Main(string[] args)
         {
-            ChatServer chatServer = new ChatServer();
+            AhemServer chatServer = new AhemServer();
             chatServer.OnMessageRecived += ChatServer_OnMessageRecived;
             chatServer.OnErrMessageRecived += ChatServer_OnErrMessageRecived;
             chatServer.Start(); 
-            IEnumerator enumerator = chatServer.GetSyncRoutine();
-            for (int i = 0; i < 10000000; i++)
-            {
-                enumerator.MoveNext();
+            //IEnumerator enumerator = chatServer.GetSyncRoutine();
+            //for (int i = 0; i < 10000000; i++)
+            //{
+            //    enumerator.MoveNext();
 
-                if ((int)enumerator.Current == 0)
-                    break;
-            }
-            Thread.Sleep(1000);
-            chatServer.Stop();
-            chatServer.Start();
+            //    if ((int)enumerator.Current == 0)
+            //        break;
+            //}
 
-            chatServer.RunSyncRoutine();
+            chatServer.RunSyncRoutine(1);
         }
 
         private static void ChatServer_OnErrMessageRecived(string msg) => Console.WriteLine(msg);

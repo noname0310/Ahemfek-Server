@@ -3,13 +3,6 @@ using Newtonsoft.Json.Converters;
 
 namespace AhemfekServer.Model
 {
-    public enum PacketType
-    {
-        ClientConnected,
-        ClientDisConnect,
-        StreamHeader
-    }
-
     public abstract class Packet
     {
         [JsonConverter(typeof(StringEnumConverter))]
@@ -28,13 +21,39 @@ namespace AhemfekServer.Model
         public ClientConnected(string clientId) : this() => ClientId = clientId;
     }
 
+    public class ClientDisConnect : Packet
+    {
+        public ClientDisConnect() => PacketType = PacketType.ClientDisConnect;
+    }
+    
     public class ClientDisConnected : Packet
     {
-        public ClientDisConnected() => PacketType = PacketType.ClientDisConnect;
+        public ClientDisConnected() => PacketType = PacketType.ClientDisConnected;
     }
 
-    public class StreamHeader : Packet
+    public abstract class StreamHeader : Packet
     {
+        [JsonConverter(typeof(StringEnumConverter))]
+        public StreamPacketType StreamPacketType { get; protected set; }
+
         public StreamHeader() => PacketType = PacketType.StreamHeader;
+    }
+
+    public class ImageStream : StreamHeader
+    {
+        public ImageStream() => StreamPacketType = StreamPacketType.Image;
+    }
+
+    public enum PacketType
+    {
+        ClientConnected,
+        ClientDisConnect,
+        ClientDisConnected,
+        StreamHeader
+    }
+
+    public enum StreamPacketType
+    {
+        Image
     }
 }
