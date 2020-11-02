@@ -13,10 +13,10 @@ namespace AhemfekServer.Server
         public event MessageHandler OnMessageRecived;
         public event MessageHandler OnErrMessageRecived;
 
-        public delegate void ClientJsonDataHandler(AhemClient client, JObject packet);
-        public event ClientJsonDataHandler OnClientJsonDataRecived;
-        public delegate void ClientStreamDataHandler(AhemClient client, byte[] packet);
-        public event ClientStreamDataHandler OnClientStreamDataRecived;
+        public delegate void ClientPacketHandler(AhemClient client, Packet packet);
+        public event ClientPacketHandler OnClientPacketRecived;
+        public delegate void ClientStreamHandler(AhemClient client, byte[] packet);
+        public event ClientStreamHandler OnClientStreamRecived;
 
         public delegate void ChatSocketHandler(AhemClient client);
         public event ChatSocketHandler OnClientConnected;
@@ -48,11 +48,11 @@ namespace AhemfekServer.Server
         private void SocketServer_OnMessageRecived(string msg) => OnMessageRecived?.Invoke(msg);
         private void SocketServer_OnErrMessageRecived(string msg) => OnErrMessageRecived?.Invoke(msg);
 
-        private void SocketServer_OnClientConnected(ClientSocket client) => OnMessageRecived?.Invoke(string.Format("SocketServer_OnClientConnected {0}", client.IPAddress.ToString()));
+        private void SocketServer_OnClientConnected(ClientSocket client) => OnMessageRecived?.Invoke($"SocketServer_OnClientConnected {client.IPAddress}");
 
         private void SocketServer_OnClientJsonDataRecived(ClientSocket client, string msg)
         {
-            OnMessageRecived?.Invoke(string.Format("SocketServer_OnClientDataRecived {0}", msg));
+            OnMessageRecived?.Invoke($"SocketServer_OnClientDataRecived {msg}");
             JObject jObject = JObject.Parse(msg);
 
             //Model.PacketType packetType = (Model.PacketType)Enum.Parse(typeof(Model.PacketType), jObject.ToObject<Packet>().PacketType);
@@ -62,23 +62,24 @@ namespace AhemfekServer.Server
             {
                 if (!AhemClientManager.ReadOnlyAhemClients.ContainsKey(client.IPAddress))
                 {
-                    AhemClient chatClient = AhemClientManager.AddClient(client, jObject.ToObject<ClientConnected>());
-                    OnMessageRecived?.Invoke(string.Format("Client {0} authenticized", client.IPAddress.ToString()));
+                    ClientConnected clientConnected = jObject.ToObject<ClientConnected>();
+                    AhemClient chatClient = AhemClientManager.AddClient(client, clientConnected);
+                    OnMessageRecived?.Invoke($"Client {client.IPAddress} authenticized");
                     OnClientConnected?.Invoke(chatClient);
+                    OnClientPacketRecived?.Invoke(chatClient, clientConnected);
                 }
                 else
-                    OnErrMessageRecived?.Invoke(string.Format("Client {0} trying authenticize mulitiple times!", client.IPAddress.ToString()));
+                    OnErrMessageRecived?.Invoke($"Client {client.IPAddress} trying authenticize mulitiple times!");
 
                 return;
             }
 
-            if (AhemClientManager.ReadOnlyAhemClients.ContainsKey(client.IPAddress) == false)
+            AhemClient indexedClient;
+            if (AhemClientManager.ReadOnlyAhemClients.TryGetValue(client.IPAddress, out indexedClient) == false)
             {
-                OnErrMessageRecived?.Invoke(string.Format("Unauthenticized or Disposed client {0} trying send data!", client.IPAddress.ToString()));
+                OnErrMessageRecived?.Invoke($"Unauthenticized or Disposed client {client.IPAddress} trying send data!");
                 return;
             }
-
-            AhemClient indexedClient = AhemClientManager.ReadOnlyAhemClients[client.IPAddress];
 
             switch (packetType)
             {
@@ -86,7 +87,8 @@ namespace AhemfekServer.Server
                     if (SocketServer.ClientSockets.ContainsKey(client.IPAddress))
                     {
                         indexedClient.ClientSocket.Dispose();
-                        OnMessageRecived?.Invoke(string.Format("client {0} disposed", client.IPAddress.ToString()));
+                        OnMessageRecived?.Invoke($"client {client.IPAddress} disposed");
+                        OnClientPacketRecived?.Invoke(indexedClient, jObject.ToObject<ClientDisConnect>());
                     }
                     break;
 
@@ -94,7 +96,9 @@ namespace AhemfekServer.Server
                     switch (jObject.ToObject<StreamHeader>().StreamPacketType)
                     {
                         case StreamPacketType.Image:
+                            ImageStream imageStream = jObject.ToObject<ImageStream>();
                             AhemClientManager.ClientStreamEnqueue(client, jObject.ToObject<ImageStream>());
+                            OnClientPacketRecived?.Invoke(indexedClient, imageStream);
                             break;
                         default:
                             break;
@@ -102,7 +106,7 @@ namespace AhemfekServer.Server
                     break;
 
                 default:
-                    OnErrMessageRecived?.Invoke(string.Format("Unidentified packet {0} recived from client {1}", ((int)packetType).ToString(), client.IPAddress.ToString()));
+                    OnErrMessageRecived?.Invoke($"Unidentified packet {(int)packetType} recived from client {client.IPAddress}");
                     break;
             }
         }
@@ -110,7 +114,15 @@ namespace AhemfekServer.Server
         private void SocketServer_OnClientByteStreamDataRecived(ClientSocket client, byte[] content)
         {
             OnMessageRecived?.Invoke($"SocketServer_OnClientByteStreamDataRecived Length:{content.Length}");
-            AhemClientManager.ClientStreamDequeue(client, content);
+            if (AhemClientManager.ReadOnlyAhemClients.TryGetValue(client.IPAddress, out AhemClient indexedClient) == false)
+            {
+                OnErrMessageRecived?.Invoke($"Unauthenticized or Disposed client {client.IPAddress} trying send data!");
+                return;
+            }
+
+            AhemClient ahemClient = AhemClientManager.ClientStreamDequeue(client, content);
+            if (ahemClient != null)
+                OnClientStreamRecived?.Invoke(ahemClient, content);
         }
 
         private void SocketServer_OnClientDisConnect(ClientSocket client)

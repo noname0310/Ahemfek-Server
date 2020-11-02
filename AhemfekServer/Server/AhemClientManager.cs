@@ -21,7 +21,6 @@ namespace AhemfekServer.Server
         public IReadOnlyDictionary<IPAddress, AhemClient> ReadOnlyAhemClients => _ahemClients;
 
         private readonly Dictionary<IPAddress, AhemClient> _ahemClients;
-        private readonly Dictionary<IPAddress, int> _clientStreamQueue;
 
         public AhemClientManager()
         {
@@ -36,10 +35,8 @@ namespace AhemfekServer.Server
         public AhemClient AddClient(ClientSocket clientSocket, ClientConnected clientConnectedinfo)
         {
             if (_ahemClients.TryGetValue(clientSocket.IPAddress, out AhemClient searchedclient))
-            {    
-                OnErrMessageRecived?.Invoke(
-                       string.Format("ClientSocket {0} is already exist while trying AddClient", clientSocket.IPAddress.ToString())
-                       );
+            {
+                OnErrMessageRecived?.Invoke($"ClientSocket {clientSocket.IPAddress} is already exist while trying AddClient");
                 return searchedclient;
             }
 
@@ -60,26 +57,23 @@ namespace AhemfekServer.Server
                 _ahemClients.Remove(client.ClientSocket.IPAddress);
             }
             else
-            {
-                OnErrMessageRecived?.Invoke(
-                    string.Format("ClientSocket {0} is not exist while trying RemoveClient", clientSocket.IPAddress.ToString())
-                    );
-            }
+                OnErrMessageRecived?.Invoke($"ClientSocket {clientSocket.IPAddress} is not exist while trying RemoveClient");
         }
 
-        public void ClientStreamEnqueue(ClientSocket clientSocket, StreamHeader streamHeader)
-        {
-            if (_ahemClients.TryGetValue(clientSocket.IPAddress, out AhemClient client))
-            {
+        public void ClientStreamEnqueue(ClientSocket clientSocket, StreamHeader streamHeader) => _ahemClients[clientSocket.IPAddress].StreamEnqueue(streamHeader);
 
+        public AhemClient ClientStreamDequeue(ClientSocket clientSocket, byte[] content)
+        {
+            AhemClient ahemClient = _ahemClients[clientSocket.IPAddress];
+            if (ahemClient.StreamHeaderQueueCount == 0)
+            {
+                OnErrMessageRecived?.Invoke($"ClientSocket {clientSocket.IPAddress} Stream queue error");
+                return null;
             }
-        }
-
-        public void ClientStreamDequeue(ClientSocket clientSocket, byte[] value)
-        {
-            if (_ahemClients.TryGetValue(clientSocket.IPAddress, out AhemClient client))
+            else
             {
-
+                ahemClient.StreamDequeue(clientSocket, content);
+                return ahemClient;
             }
         }
     }
