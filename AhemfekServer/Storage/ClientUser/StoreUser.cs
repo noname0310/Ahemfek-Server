@@ -23,33 +23,14 @@ namespace AhemfekServer.Storage.ClientUser
             PrivateDocs = new List<Doc>();
         }
 
-        public List<DocThumbnail> GetDocThumbList(List<Doc> reference, int startIndex, int count)
+        public List<DocThumbnail> GetDocThumbList(int startIndex, int count)
         {
-            List<string> SearchList = new List<string>();
+            List<DocThumbnail> pagedDocsThum = new List<DocThumbnail>();
             for (int i = startIndex; i < startIndex + count; i++)
             {
-            }
-                List<DocThumbnail> pagedDocsThum = new List<DocThumbnail>();
-            switch (docOrder)
-            {
-                case DocOrder.Newest:
-                    for (int i = startIndex; i < startIndex + count; i++)
-                    {
-                        if (_newestDocuments.Count < i + 1)
-                            break;
-                        pagedDocsThum.Add(new DocThumbnail(_newestDocuments.Values[i]));
-                    }
+                if (PrivateDocs.Count < i + 1)
                     break;
-                case DocOrder.Popular:
-                    for (int i = startIndex; i < startIndex + count; i++)
-                    {
-                        if (_popularDocuments.Count < i + 1)
-                            break;
-                        pagedDocsThum.Add(new DocThumbnail(_newestDocuments.Values[i]));
-                    }
-                    break;
-                default:
-                    break;
+                pagedDocsThum.Add(new DocThumbnail(PrivateDocs[i]));
             }
             return pagedDocsThum;
         }

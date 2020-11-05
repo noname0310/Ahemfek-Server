@@ -18,7 +18,11 @@ namespace AhemfekServer.Storage
 
         public AhemStorage() 
         {
-            _docFolder = new Dictionary<string, DocFolder>();
+            _docFolder = new Dictionary<string, DocFolder>
+            {
+                { "life", new DocFolder("life") },
+                { "love", new DocFolder("love") }
+            };
         }
 
         public void Load()
@@ -189,9 +193,14 @@ namespace AhemfekServer.Storage
             else
                 return null;
         }
-        public List<DocThumbnail> GetPrivateDocThumb(string userId, string theme, int startIndex, int count)
-        {
 
+        public List<DocThumbnail> GetPrivateDocThumb(string userId, int startIndex, int count)
+        {
+            if (_storeUsers.TryGetValue(userId, out StoreUser storeUser))
+            {
+                return storeUser.GetDocThumbList(startIndex, count);
+            }
+            return null;
         }
 
         public Doc GetUserDoc(string userId, string docName)
@@ -200,16 +209,25 @@ namespace AhemfekServer.Storage
             {
                 foreach (var doc in item.Value.NewestDocuments)
                 {
-                    if (doc.Value.Title == docName)
+                    if (doc.Value.User.Id == userId && doc.Value.Title == docName)
                     {
+                        return doc.Value;
                     }
                 }
             }
+            return null;
         }
 
         public Doc GetUserPrivateDoc(string userId, string docName)
         {
-
+            if (_storeUsers.TryGetValue(userId, out StoreUser value))
+            {
+                Doc doc = value.PrivateDocs.Find(item => item.Title == docName);
+                if (doc == default)
+                    return null;
+                return doc;
+            }
+            return null;
         }
     }
 }
