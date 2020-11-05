@@ -229,5 +229,10 @@ namespace AhemfekServer.Storage
             }
             return null;
         }
+
+        public List<string> GetTheme()
+        {
+            return _docFolder.Select(item => item.Key).ToList();
+        }
     }
 }
