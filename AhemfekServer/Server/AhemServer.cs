@@ -4,6 +4,8 @@ using Newtonsoft.Json.Linq;
 using TinyTCPServer;
 using TinyTCPServer.ClientProcess;
 using AhemfekServer.Model;
+using AhemfekServer.Storage;
+using System.Threading.Tasks;
 
 namespace AhemfekServer.Server
 {
@@ -27,8 +29,12 @@ namespace AhemfekServer.Server
 
         public IAhemClientManager IAhemClientManager => AhemClientManager;
 
+        public bool Running { get; set; }
+
         private SocketServer SocketServer;
         private AhemClientManager AhemClientManager;
+        private AhemStorage AhemStorage;
+        private StorageSaver StorageSaver;
 
         public AhemServer()
         {
@@ -43,6 +49,10 @@ namespace AhemfekServer.Server
             SocketServer.OnClientDisConnected += SocketServer_OnClientDisConnected;
 
             AhemClientManager = new AhemClientManager();
+            AhemStorage = new AhemStorage();
+            StorageSaver = new StorageSaver(AhemStorage, 10);
+            AhemStorage.Load();
+            Running = false;
         }
 
         private void SocketServer_OnMessageRecived(string msg) => OnMessageRecived?.Invoke(msg);
@@ -140,6 +150,8 @@ namespace AhemfekServer.Server
         public void Start()
         {
             SocketServer.Start(20310);
+            StorageSaver.Start();
+            Running = true;
             OnMessageRecived?.Invoke("Server started");
         }
 
@@ -147,13 +159,47 @@ namespace AhemfekServer.Server
         {
             SocketServer.Stop();
             AhemClientManager.Dispose();
+            StorageSaver.Stop();
+            Running = false;
             OnMessageRecived?.Invoke("Server stopped");
         }
 
-        public void RunSyncRoutine() => SocketServer.RunSyncRoutine();
+        public void RunSyncRoutine()
+        {
+            var socketRoutine = SocketServer.GetSyncRoutine();
 
-        public void RunSyncRoutine(int delay) => SocketServer.RunSyncRoutine(delay);
+            while (Running)
+            {
+                socketRoutine.MoveNext();
+                if(StorageSaver.TimerQueue.TryDequeue(out Action action))
+                    action.Invoke();
+            }
+        }
 
-        public IEnumerator GetSyncRoutine() => SocketServer.GetSyncRoutine();
+        public void RunSyncRoutine(int delay)
+        {
+            var socketRoutine = SocketServer.GetSyncRoutine();
+
+            while (Running)
+            {
+                socketRoutine.MoveNext();
+                if (StorageSaver.TimerQueue.TryDequeue(out Action action))
+                    action.Invoke();
+                Task.Delay(delay).Wait();
+            }
+        }
+
+        public IEnumerator GetSyncRoutine()
+        {
+            var socketRoutine = SocketServer.GetSyncRoutine();
+
+            while (Running)
+            {
+                socketRoutine.MoveNext();
+                if (StorageSaver.TimerQueue.TryDequeue(out Action action))
+                    action.Invoke();
+                yield return 1;
+            }
+        }
     }
 }

@@ -149,5 +149,22 @@ namespace TinyTCPServer
 
             yield return 0;
         }
+
+        public IEnumerator GetSyncRoutine(int delay)
+        {
+            while (Running)
+            {
+                while (ActionsConcurrentQueue.Count != 0)
+                {
+                    Action action;
+                    if (ActionsConcurrentQueue.TryDequeue(out action))
+                        action.Invoke();
+                }
+                Task.Delay(delay).Wait();
+                yield return 1;
+            }
+
+            yield return 0;
+        }
     }
 }
