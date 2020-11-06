@@ -6,6 +6,8 @@ using TinyTCPServer.ClientProcess;
 using AhemfekServer.Model;
 using AhemfekServer.Storage;
 using System.Threading.Tasks;
+using System.Collections.Generic;
+using AhemfekServer.Storage.Document;
 
 namespace AhemfekServer.Server
 {
@@ -27,31 +29,31 @@ namespace AhemfekServer.Server
         public event SocketHandler OnClientDisConnect;
         public event SocketHandler OnClientDisConnected;
 
-        public IAhemClientManager IAhemClientManager => AhemClientManager;
+        public IAhemClientManager IAhemClientManager => _ahemClientManager;
 
         public bool Running { get; set; }
 
-        private SocketServer SocketServer;
-        private AhemClientManager AhemClientManager;
-        private AhemStorage AhemStorage;
-        private StorageSaver StorageSaver;
+        private SocketServer _socketServer;
+        private AhemClientManager _ahemClientManager;
+        private AhemStorage _ahemStorage;
+        private StorageSaver _storageSaver;
 
         public AhemServer()
         {
-            SocketServer = new SocketServer(512);
+            _socketServer = new SocketServer(512);
 
-            SocketServer.OnErrMessageRecived += SocketServer_OnErrMessageRecived;
-            SocketServer.OnMessageRecived += SocketServer_OnMessageRecived;
-            SocketServer.OnClientConnected += SocketServer_OnClientConnected;
-            SocketServer.OnClientUTF8JsonDataRecived += SocketServer_OnClientJsonDataRecived;
-            SocketServer.OnClientByteStreamDataRecived += SocketServer_OnClientByteStreamDataRecived;
-            SocketServer.OnClientDisConnect += SocketServer_OnClientDisConnect;
-            SocketServer.OnClientDisConnected += SocketServer_OnClientDisConnected;
+            _socketServer.OnErrMessageRecived += SocketServer_OnErrMessageRecived;
+            _socketServer.OnMessageRecived += SocketServer_OnMessageRecived;
+            _socketServer.OnClientConnected += SocketServer_OnClientConnected;
+            _socketServer.OnClientUTF8JsonDataRecived += SocketServer_OnClientJsonDataRecived;
+            _socketServer.OnClientByteStreamDataRecived += SocketServer_OnClientByteStreamDataRecived;
+            _socketServer.OnClientDisConnect += SocketServer_OnClientDisConnect;
+            _socketServer.OnClientDisConnected += SocketServer_OnClientDisConnected;
 
-            AhemClientManager = new AhemClientManager();
-            AhemStorage = new AhemStorage();
-            StorageSaver = new StorageSaver(AhemStorage, 10);
-            AhemStorage.Load();
+            _ahemClientManager = new AhemClientManager();
+            _ahemStorage = new AhemStorage();
+            _storageSaver = new StorageSaver(_ahemStorage, 10);
+            _ahemStorage.Load();
             Running = false;
         }
 
@@ -70,10 +72,10 @@ namespace AhemfekServer.Server
 
             if (packetType == Model.PacketType.ClientConnected)
             {
-                if (!AhemClientManager.ReadOnlyAhemClients.ContainsKey(client.IPAddress))
+                if (!_ahemClientManager.ReadOnlyAhemClients.ContainsKey(client.IPAddress))
                 {
                     ClientConnected clientConnected = jObject.ToObject<ClientConnected>();
-                    AhemClient chatClient = AhemClientManager.AddClient(client, clientConnected);
+                    AhemClient chatClient = _ahemClientManager.AddClient(client, clientConnected);
                     OnMessageRecived?.Invoke($"Client {client.IPAddress} authenticized");
                     OnClientConnected?.Invoke(chatClient);
                     OnClientPacketRecived?.Invoke(chatClient, clientConnected);
@@ -85,7 +87,7 @@ namespace AhemfekServer.Server
             }
 
             AhemClient indexedClient;
-            if (AhemClientManager.ReadOnlyAhemClients.TryGetValue(client.IPAddress, out indexedClient) == false)
+            if (_ahemClientManager.ReadOnlyAhemClients.TryGetValue(client.IPAddress, out indexedClient) == false)
             {
                 OnErrMessageRecived?.Invoke($"Unauthenticized or Disposed client {client.IPAddress} trying send data!");
                 return;
@@ -94,7 +96,7 @@ namespace AhemfekServer.Server
             switch (packetType)
             {
                 case Model.PacketType.ClientDisConnect:
-                    if (SocketServer.ClientSockets.ContainsKey(client.IPAddress))
+                    if (_socketServer.ClientSockets.ContainsKey(client.IPAddress))
                     {
                         indexedClient.ClientSocket.Dispose();
                         OnMessageRecived?.Invoke($"client {client.IPAddress} disposed");
@@ -102,12 +104,61 @@ namespace AhemfekServer.Server
                     }
                     break;
 
+                case Model.PacketType.UploadDocument:
+                    _ahemStorage.TryAddDoc(jObject.ToObject<UploadDocument>().Doc);
+                    break;
+                case Model.PacketType.RemoveDocument:
+                    RemoveDocument removeDocument = jObject.ToObject<RemoveDocument>();
+                    _ahemStorage.RemoveDoc(removeDocument.Theme, indexedClient?.User.Id, removeDocument.DocName);
+                    break;
+                case Model.PacketType.UploadPrivateDocument:
+                    UploadPrivateDocument uploadPrivateDocument = jObject.ToObject<UploadPrivateDocument>();
+                    _ahemStorage.TryAddPrivateDoc(uploadPrivateDocument.Doc);
+                    break;
+                case Model.PacketType.RemovePrivateDocument:
+                    RemovePrivateDocument removePrivateDocument = jObject.ToObject<RemovePrivateDocument>();
+                    _ahemStorage.RemovePrivateDoc(indexedClient.User.Id, removePrivateDocument.DocName);
+                    break;
+                case Model.PacketType.Like:
+                    Like like = jObject.ToObject<Like>();
+                    _ahemStorage.TryLike(like.Theme, like.DocName);
+                    break;
+                case Model.PacketType.Unlike:
+                    UnLike unlike = jObject.ToObject<UnLike>();
+                    _ahemStorage.TryUnlike(unlike.Theme, unlike.DocName);
+                    break;
+                case Model.PacketType.Follow:
+                    Follow follow = jObject.ToObject<Follow>();
+                    _ahemStorage.AddFollower(follow.Target.Id, indexedClient.User.Id);
+                    break;
+                case Model.PacketType.UnFollow:
+                    UnFollow unFollow = jObject.ToObject<UnFollow>();
+                    _ahemStorage.RemoveFollower(unFollow.Target.Id, indexedClient.User.Id);
+                    break;
+                case Model.PacketType.ReqPageData:
+                    ReqPageData reqPageData = jObject.ToObject<ReqPageData>();
+                    List<DocThumbnail> publicDocThumbs = _ahemStorage.GetPublicDocThumb(reqPageData.Theme, reqPageData.StartIndex, reqPageData.Count, reqPageData.DocOrder);
+                    indexedClient.SendData(new PageData(publicDocThumbs));
+                    break;
+                case Model.PacketType.ReqPrivatePageData:
+                    ReqPrivatePageData reqPrivatePageData = jObject.ToObject<ReqPrivatePageData>();
+                    List<DocThumbnail> privateDocThumbs = _ahemStorage.GetPrivateDocThumb(indexedClient.User.Id, reqPrivatePageData.StartIndex, reqPrivatePageData.Count);
+                    indexedClient.SendData(new PrivatePageData(privateDocThumbs));
+                    break;
+                case Model.PacketType.ReqDoc:
+                    ReqDoc reqDoc = jObject.ToObject<ReqDoc>();
+                    indexedClient.SendData(new PDoc(_ahemStorage.GetUserDoc(reqDoc.Author.Id, reqDoc.DocName)));
+                    break;
+                case Model.PacketType.ReqThemes:
+                    indexedClient.SendData(new Themes(_ahemStorage.GetTheme()));
+                    break;
+
                 case Model.PacketType.StreamHeader:
                     switch (jObject.ToObject<StreamHeader>().StreamPacketType)
                     {
                         case StreamPacketType.Image:
                             ImageStream imageStream = jObject.ToObject<ImageStream>();
-                            AhemClientManager.ClientStreamEnqueue(client, jObject.ToObject<ImageStream>());
+                            _ahemClientManager.ClientStreamEnqueue(client, jObject.ToObject<ImageStream>());
                             OnClientPacketRecived?.Invoke(indexedClient, imageStream);
                             break;
                         default:
@@ -124,66 +175,66 @@ namespace AhemfekServer.Server
         private void SocketServer_OnClientByteStreamDataRecived(ClientSocket client, byte[] content)
         {
             OnMessageRecived?.Invoke($"SocketServer_OnClientByteStreamDataRecived Length:{content.Length}");
-            if (AhemClientManager.ReadOnlyAhemClients.TryGetValue(client.IPAddress, out AhemClient indexedClient) == false)
+            if (_ahemClientManager.ReadOnlyAhemClients.TryGetValue(client.IPAddress, out AhemClient indexedClient) == false)
             {
                 OnErrMessageRecived?.Invoke($"Unauthenticized or Disposed client {client.IPAddress} trying send data!");
                 return;
             }
 
-            AhemClient ahemClient = AhemClientManager.ClientStreamDequeue(client, content);
+            AhemClient ahemClient = _ahemClientManager.ClientStreamDequeue(client, content);
             if (ahemClient != null)
                 OnClientStreamRecived?.Invoke(ahemClient, content);
         }
 
         private void SocketServer_OnClientDisConnect(ClientSocket client)
         {
-            AhemClientManager.RemoveClient(client);
+            _ahemClientManager.RemoveClient(client);
             OnClientDisConnect?.Invoke(client);
         }
         private void SocketServer_OnClientDisConnected(ClientSocket client)
         {
-            if (AhemClientManager.ReadOnlyAhemClients.ContainsKey(client.IPAddress))
-                AhemClientManager.RemoveClient(client);
+            if (_ahemClientManager.ReadOnlyAhemClients.ContainsKey(client.IPAddress))
+                _ahemClientManager.RemoveClient(client);
             OnClientDisConnected?.Invoke(client);
         }
 
         public void Start()
         {
-            SocketServer.Start(20310);
-            StorageSaver.Start();
+            _socketServer.Start(20310);
+            _storageSaver.Start();
             Running = true;
             OnMessageRecived?.Invoke("Server started");
         }
 
         public void Stop()
         {
-            SocketServer.Stop();
-            AhemClientManager.Dispose();
-            StorageSaver.Stop();
+            _socketServer.Stop();
+            _ahemClientManager.Dispose();
+            _storageSaver.Stop();
             Running = false;
             OnMessageRecived?.Invoke("Server stopped");
         }
 
         public void RunSyncRoutine()
         {
-            var socketRoutine = SocketServer.GetSyncRoutine();
+            var socketRoutine = _socketServer.GetSyncRoutine();
 
             while (Running)
             {
                 socketRoutine.MoveNext();
-                if(StorageSaver.TimerQueue.TryDequeue(out Action action))
+                if(_storageSaver.TimerQueue.TryDequeue(out Action action))
                     action.Invoke();
             }
         }
 
         public void RunSyncRoutine(int delay)
         {
-            var socketRoutine = SocketServer.GetSyncRoutine();
+            var socketRoutine = _socketServer.GetSyncRoutine();
 
             while (Running)
             {
                 socketRoutine.MoveNext();
-                if (StorageSaver.TimerQueue.TryDequeue(out Action action))
+                if (_storageSaver.TimerQueue.TryDequeue(out Action action))
                     action.Invoke();
                 Task.Delay(delay).Wait();
             }
@@ -191,12 +242,12 @@ namespace AhemfekServer.Server
 
         public IEnumerator GetSyncRoutine()
         {
-            var socketRoutine = SocketServer.GetSyncRoutine();
+            var socketRoutine = _socketServer.GetSyncRoutine();
 
             while (Running)
             {
                 socketRoutine.MoveNext();
-                if (StorageSaver.TimerQueue.TryDequeue(out Action action))
+                if (_storageSaver.TimerQueue.TryDequeue(out Action action))
                     action.Invoke();
                 yield return 1;
             }

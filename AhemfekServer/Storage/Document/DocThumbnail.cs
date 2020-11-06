@@ -3,7 +3,7 @@
 namespace AhemfekServer.Storage.Document
 {
     [Serializable]
-    class DocThumbnail
+    public class DocThumbnail
     {
         public string Id { get; set; }
         public string Date { get; set; }

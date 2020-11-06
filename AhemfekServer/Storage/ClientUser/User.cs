@@ -6,7 +6,7 @@ using Newtonsoft.Json;
 namespace AhemfekServer.Storage.ClientUser
 {
     [Serializable]
-    class User : IEquatable<User>
+    public class User : IEquatable<User>
     {
         [JsonProperty("id")]
         public string Id { get; set; }

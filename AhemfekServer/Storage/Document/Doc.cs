@@ -7,7 +7,7 @@ using System.Diagnostics.CodeAnalysis;
 namespace AhemfekServer.Storage.Document
 {
     [Serializable]
-    class Doc : IEquatable<Doc>
+    public class Doc : IEquatable<Doc>
     {
         [JsonProperty("theme")]
         public string Theme { get; set; }

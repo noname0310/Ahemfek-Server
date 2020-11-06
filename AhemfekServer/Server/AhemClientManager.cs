@@ -42,7 +42,7 @@ namespace AhemfekServer.Server
 
             AhemClient chatClient = new AhemClient(
                 clientSocket,
-                clientConnectedinfo.ClientId
+                clientConnectedinfo.User
                 );
 
             _ahemClients.Add(clientSocket.IPAddress, chatClient);

@@ -135,18 +135,18 @@ namespace AhemfekServer.Storage
             return true;
         }
 
-        public bool TryLike(string theme, string DocName)
+        public bool TryLike(string theme, string docName)
         {
             if (_docFolder.TryGetValue(theme, out DocFolder value))
-                return value.TryLike(DocName);
+                return value.TryLike(docName);
             else
                 return false;
         }
 
-        public bool TryUnlike(string theme, string DocName)
+        public bool TryUnlike(string theme, string docName)
         {
             if (_docFolder.TryGetValue(theme, out DocFolder value))
-                return value.TryUnlike(DocName);
+                return value.TryUnlike(docName);
             else
                 return false;
         }
